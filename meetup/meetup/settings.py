@@ -19,7 +19,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'meetup.apps.MeetupConfig'
+    'meetup_bot.apps.Meetup_botConfig'
 ]
 
 MIDDLEWARE = [
