@@ -1,4 +1,5 @@
 import datetime
+from enum import unique
 
 from django.db import models
 
@@ -10,8 +11,8 @@ ROLE = [
 
 
 class Member(models.Model):
-    telegram_id = models.IntegerField('telegram_id')
-    telegram_name = models.CharField(verbose_name='Телеграм', max_length=200, unique=True)
+    telegram_id = models.IntegerField('telegram_id', unique=True)
+    telegram_name = models.CharField(verbose_name='Телеграм', max_length=200)
     role = models.CharField(
         verbose_name='Спикер или Гость?',
         max_length=10,
