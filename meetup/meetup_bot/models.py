@@ -8,18 +8,17 @@ ROLE = [
 
 
 class Member(models.Model):
-    telegram = models.CharField('Телеграм', max_length=200, unique=True)
+    telegram = models.CharField(verbose_name='Телеграм', max_length=200, unique=True)
     role = models.CharField(
-        'Спикер или Гость?',
+        verbose_name='Спикер или Гость?',
         max_length=10,
         choices=ROLE,
         default='guest'
     )
-    donation = models.FloatField('Сумма доната', null=True, default=0)
-
+    donation = models.FloatField(verbose_name='Сумма доната', null=True, default=0)
 
     def __str__(self):
-        return self.name
+        return self.telegram
 
 
 class Presentation(models.Model):
@@ -30,29 +29,32 @@ class Presentation(models.Model):
         related_name='presentations',
         verbose_name='Спикер'
     )
-    topic = models.CharField('Тема выступления', max_length=200)
+    topic = models.CharField(verbose_name='Тема выступления', max_length=200)
     duration = models.DurationField(verbose_name='Продолжительность доклада')
-    is_active_now = models.BooleanField(default=False)
-
+    is_active_now = models.BooleanField(verbose_name='Проходит прямо сейчас', default=False)
 
     def __str__(self):
-        return self.member
-
+        return self.member.telegram, self.topic
 
 class Form(models.Model):
     member = models.ForeignKey(
         Member,
         on_delete=models.CASCADE,
-        related_name='questions',
-        verbose_name='Спрашивающий'
+        related_name='forms',
+        verbose_name='Участник'
     )
-    name = models.CharField('Ваше имя', max_length=200, blank=True)
-    age = models.IntegerField('Сколько вам лет?')
-    company = models.CharField('Компания', max_length=100, blank=True)
-    job = models.CharField('Ваша должность', max_length=100, blank=True)
-    stack = models.CharField('С какими технологиями работаете?', max_length=200, blank=True)
-    hobby = models.CharField('Ваше хобби?', max_length=100, blank=True)
-    goal = models.CharField('Цель знакомства?', max_length=100, blank=True)
-    region = models.CharField('Регион', max_length=100, blank=True)
+    name = models.CharField(verbose_name='Ваше имя', max_length=200, blank=True)
+    age = models.IntegerField(verbose_name='Сколько вам лет?', null=True, blank=True)
+    company = models.CharField(verbose_name='Компания', max_length=100, blank=True)
+    job = models.CharField(verbose_name='Ваша должность', max_length=100, blank=True)
+    stack = models.CharField(
+        verbose_name='С какими технологиями работаете?',
+        max_length=200,
+        blank=True
+    )
+    hobby = models.CharField(verbose_name='Ваше хобби?', max_length=100, blank=True)
+    goal = models.CharField(verbose_name='Цель знакомства?', max_length=100, blank=True)
+    region = models.CharField(verbose_name='Регион', max_length=100, blank=True)
 
-
+    def __str__(self):
+        return self.name, self.job, self.region
