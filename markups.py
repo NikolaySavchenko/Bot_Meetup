@@ -38,6 +38,21 @@ participate_markup_buttons = [
 participate_markup.add(*participate_markup_buttons)
 
 
+organizer_markup = types.InlineKeyboardMarkup(row_width=2)
+additional_organizer_buttons = [
+    types.InlineKeyboardButton(
+        'Общее оповещение',
+        callback_data='anounce'
+    ),
+    types.InlineKeyboardButton(
+        'Закончить выступление спикера',
+        callback_data='next_presentation'
+    ),
+]
+organizer_markup.add(*participate_markup_buttons)
+organizer_markup.add(*additional_organizer_buttons)
+
+
 dialog_markup = types.InlineKeyboardMarkup(row_width=2)
 dialog_markup_buttons = [
     types.InlineKeyboardButton(
