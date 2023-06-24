@@ -96,9 +96,10 @@ async def next_presentation(cb: types.callback_query):
         await sync_to_async(future_presentation.save)()
     curent_presentation.is_active_now = False
     await sync_to_async(curent_presentation.save)()
-    following_presentation = await sync_to_async(future_presentations.first)()
-    following_presentation.is_active_now = True
-    await sync_to_async(following_presentation.save)()
+    if future_presentations.first():
+        following_presentation = await sync_to_async(future_presentations.first)()
+        following_presentation.is_active_now = True
+        await sync_to_async(following_presentation.save)()
 
     await cb.message.answer(message)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
