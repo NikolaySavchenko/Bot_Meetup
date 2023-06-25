@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import random
+
+from django.utils import timezone
 from pathlib import Path
 
 import django
@@ -17,23 +19,20 @@ from asgiref.sync import sync_to_async
 
 logging.basicConfig(level=logging.INFO)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'meetup.settings')
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 
-from meetup_bot.models import Member, Form
+from meetup_bot.models import Member, Presentation, Form
 import markups as m
-
 
 BASE_DIR = Path(__file__).resolve().parent
 dotenv.load_dotenv(Path(BASE_DIR, '.env'))
 token = os.environ['BOT_TOKEN']
 PAYMENT_TOKEN = os.environ['PAYMENT_TOKEN']
 
-
-
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-
 
 
 class UserState(StatesGroup):
@@ -46,6 +45,8 @@ class UserState(StatesGroup):
     hobby = State()
     goal = State()
     region = State()
+    question = State()
+    anounce = State()
 
 
 @dp.message_handler()
@@ -55,6 +56,7 @@ async def start_conversation(msg: types.Message, state: FSMContext):
                                                                             telegram_name=msg['from']['username'])
     else:
         member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id)
+    member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id)
     message = f'Приветствую, {member.telegram_name}'
     await msg.answer(message)
     await msg.answer('Main menu', reply_markup=m.client_start_markup)
@@ -62,58 +64,90 @@ async def start_conversation(msg: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text='about_bot')
 async def about_bot(cb: types.callback_query):
-    message = 'Информация о боте + информация о ближайшем митапе'
+    message = 'Данный бот позволяет получить информацию о расписании митапа и задать вопросы текущему спикеру'
     await cb.message.answer(message)
     await cb.message.answer('Main menu', reply_markup=m.client_start_markup)
 
 
 @dp.callback_query_handler(text='participate_in_meetup', state=[UserState, None])
-async def participate(cb: types.callback_query):
+async def participate(cb: types.callback_query, state: FSMContext):
+    await state.reset_state(with_data=False)
     member = await sync_to_async(Member.objects.get)(telegram_id=cb['from']['id'])
     if member.role == 'organizer':
-        organizer_markup = m.participate_markup
-        additional_organizer_buttons = [
-            types.InlineKeyboardButton(
-                'Общее оповещение',
-                callback_data='anounce'
-            ),
-            types.InlineKeyboardButton(
-                'Закончить выступление спикера',
-                callback_data='next_presentation'
-            ),
-        ]
-        organizer_markup.add(*additional_organizer_buttons)
-        await cb.message.answer('Organizer menu', reply_markup=organizer_markup)
+        await cb.message.answer('Organizer menu', reply_markup=m.organizer_markup)
     else:
         await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
-@dp.callback_query_handler(text='anounce', state=[UserState, None])
-async def anounce(cb: types.callback_query):
-    message = 'Заглушка для anounce'
-    await cb.message.answer(message)
-    await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
+@dp.callback_query_handler(text='anounce')
+async def ask_anounce(cb: types.callback_query):
+    await cb.message.delete()
+    await cb.message.answer('Введите текст оповещения')
+    await UserState.anounce.set()
+    await cb.answer()
+
+
+@dp.message_handler(lambda msg: msg.text, state=UserState.anounce)
+async def anounce(msg: types.Message, state: FSMContext):
+    members = await sync_to_async(Member.objects.exclude)(telegram_id=msg.from_id)
+    async for member in members:
+        await bot.send_message(member.telegram_id, msg.text)
+    await msg.answer('Organizer menu', reply_markup=m.organizer_markup)
 
 
 @dp.callback_query_handler(text='next_presentation', state=[UserState, None])
 async def next_presentation(cb: types.callback_query):
     message = 'Заглушка для next_presentation'
+
+    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
+    delay = (timezone.localtime(timezone.now()) -
+             (curent_presentation.start_time +
+              curent_presentation.duration))
+    cpd = await sync_to_async(curent_presentation.start_time.date)()
+    today_presentations = await sync_to_async(Presentation.objects.filter)(start_time__date=cpd)
+    future_presentations = await sync_to_async(lambda: today_presentations.filter(start_time__gt=curent_presentation.start_time).order_by('start_time'))()
+    async for future_presentation in future_presentations:
+        future_presentation.start_time = future_presentation.start_time + delay
+        await sync_to_async(future_presentation.save)()
+    curent_presentation.is_active_now = False
+    await sync_to_async(curent_presentation.save)()
+    if future_presentations.first():
+        following_presentation = await sync_to_async(future_presentations.first)()
+        following_presentation.is_active_now = True
+        await sync_to_async(following_presentation.save)()
+
     await cb.message.answer(message)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
 @dp.callback_query_handler(text='schedule', state=[UserState, None])
 async def show_schedule(cb: types.callback_query):
-    message = 'Заглушка для расписания'
+    message = []
+    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
+    cpd = await sync_to_async(curent_presentation.start_time.date)()
+    today_presentations = await sync_to_async(Presentation.objects.filter)(start_time__date=cpd)
+    future_presentations = await sync_to_async(lambda: today_presentations.filter(start_time__gte=curent_presentation.start_time).order_by('start_time'))()
+    async for future_presentation in future_presentations:
+        info = f'{future_presentation.topic} начинается в {future_presentation.start_time} и продлится {future_presentation.duration}'
+        await sync_to_async(message.append)(info)
     await cb.message.answer(message)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
-@dp.callback_query_handler(text='ask_question', state=[UserState, None])
+@dp.callback_query_handler(text='ask_question')
 async def ask_question(cb: types.callback_query):
-    message = 'Заглушка на вопрос, надо будет перепроверить на перехват cb.message.text'
-    await cb.message.answer(message)
-    await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
+    await cb.message.delete()
+    await cb.message.answer('Введите ваш вопрос')
+    await UserState.question.set()
+    await cb.answer()
+
+
+@dp.message_handler(lambda msg: msg.text, state=UserState.question)
+async def question(msg: types.Message, state:FSMContext):
+    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
+    member = await sync_to_async(Member.objects.get)(id=curent_presentation.member.id)
+    await bot.send_message(member.telegram_id, msg.text)
+    await msg.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
 def get_random_form(member):
@@ -274,9 +308,9 @@ async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
 
 
 @dp.message_handler(
-        content_types=ContentType.SUCCESSFUL_PAYMENT,
-        state=[UserState, None]
-    )
+    content_types=ContentType.SUCCESSFUL_PAYMENT,
+    state=[UserState, None]
+)
 async def successful_payment(message: types.Message, state: FSMContext):
     await bot.send_message(
         message.chat.id,
@@ -284,7 +318,6 @@ async def successful_payment(message: types.Message, state: FSMContext):
         f'{message.successful_payment.currency} done'
     )
     # тут фунция для записи в бд информации о донате await sync_to_async(funcs.pay_order)(payloads['schedule_id'])
-
 
 
 executor.start_polling(dp, skip_updates=False)
