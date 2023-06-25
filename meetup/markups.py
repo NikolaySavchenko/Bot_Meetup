@@ -26,7 +26,7 @@ participate_markup_buttons = [
         callback_data='ask_question'
     ),
     types.InlineKeyboardButton(
-        'Учавствовать в диалоге',
+        'Хочу познакомиться!',
         callback_data='start_dialog'
     ),
     types.InlineKeyboardButton(
@@ -75,7 +75,6 @@ form_markup_buttons = [
         'Подобрать другую',
         callback_data='repeat_form'
     ),
-
 ]
 
 form_markup.add(*form_markup_buttons)

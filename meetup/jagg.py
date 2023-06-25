@@ -16,12 +16,15 @@ from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.types.message import ContentType
 from asgiref.sync import sync_to_async
 
+
 logging.basicConfig(level=logging.INFO)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'meetup.settings')
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 
+
 from meetup_bot.models import Member, Presentation, Form, Donation
+
 import markups as m
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -36,6 +39,14 @@ dp = Dispatcher(bot, storage=storage)
 
 class UserState(StatesGroup):
     meetup = State()
+    name = State()
+    age = State()
+    company = State()
+    job = State()
+    stack = State()
+    hobby = State()
+    goal = State()
+    region = State()
     question = State()
     anounce = State()
     name = State()
@@ -108,9 +119,10 @@ async def next_presentation(cb: types.callback_query):
         await sync_to_async(future_presentation.save)()
     curent_presentation.is_active_now = False
     await sync_to_async(curent_presentation.save)()
-    following_presentation = await sync_to_async(future_presentations.first)()
-    following_presentation.is_active_now = True
-    await sync_to_async(following_presentation.save)()
+    if future_presentations.first():
+        following_presentation = await sync_to_async(future_presentations.first)()
+        following_presentation.is_active_now = True
+        await sync_to_async(following_presentation.save)()
 
     await cb.message.answer(message)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
