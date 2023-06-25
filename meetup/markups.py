@@ -82,3 +82,29 @@ form_markup_buttons = [
 ]
 
 form_markup.add(*form_markup_buttons)
+
+
+form_markup_return = types.InlineKeyboardMarkup(row_width=2)
+form_markup_return_buttons = [
+    types.InlineKeyboardButton(
+        'Вернуться в главное меню',
+        callback_data='participate_in_meetup'
+    ),
+]
+
+form_markup_return.add(*form_markup_return_buttons)
+
+dialog2_markup = types.InlineKeyboardMarkup(row_width=2)
+dialog2_markup_buttons = [
+    types.InlineKeyboardButton(
+        'Давай попробуем',
+        callback_data='start_dialog'
+    ),
+    types.InlineKeyboardButton(
+        'Не хочу',
+        callback_data='participate_in_meetup'
+    ),
+
+]
+
+dialog2_markup.add(*dialog2_markup_buttons)

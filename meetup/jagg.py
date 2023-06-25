@@ -203,10 +203,8 @@ async def question(msg: types.Message, state: FSMContext):
 
 def get_random_form(member):
     forms = Form.objects.exclude(member=member)
-    try:
-        random_user = random.choice(forms)
-
-        text = f'Имя: {random_user.name} \n\
+    random_user = random.choice(forms)
+    text = f'Имя: {random_user.name} \n\
                  Возраст: {random_user.age} \n\
                  Должность и компания: {random_user.job}, {random_user.company} \n\
                  Технологии: {random_user.stack} \n\
@@ -214,10 +212,6 @@ def get_random_form(member):
                  Цель: {random_user.goal} \n\
                  Регион: {random_user.region} \n\
                  Телеграмм: @{random_user.member.telegram_name}'
-    except IndexError:
-        pass
-        text = "Никто еще не прошел опрос. Ты первый."
-
     return text
 
 
@@ -232,8 +226,14 @@ async def start_dialog(cb: types.callback_query):
         Тогда пройди опрос и я пришлю тебе анкету единомышленника.\
         Если он тебе не понравится, я предложу другого.', reply_markup=m.dialog_markup)
     else:
-        text = await sync_to_async(get_random_form)(member)
-        await cb.message.answer(text=text, reply_markup=m.form_markup)
+        try:
+            text = await sync_to_async(get_random_form)(member)
+            await cb.message.answer(text=text, reply_markup=m.form_markup)
+        except IndexError:
+            pass
+            text = "Никто еще не прошел опрос. Ты первый."
+            await cb.message.answer(text=text, reply_markup=m.form_markup_return)
+
 
 
 @dp.callback_query_handler(text='repeat_form', state=[UserState, None])
@@ -259,6 +259,12 @@ async def name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=UserState.age)
 async def age(message: types.Message, state: FSMContext):
+    try:
+        val = int(message.text)
+    except ValueError:
+        await message.answer("Это не похоже на возраст. Сколько тебе лет?")
+        return
+
     await state.update_data(age=message.text)
     await message.answer("В какой компании работаешь?")
     await UserState.company.set()
@@ -299,6 +305,13 @@ async def goal(message: types.Message, state: FSMContext):
     await UserState.region.set()
 
 
+def get_id():
+    first_form = Form.objects.get(id=1)
+    first_member_id = first_form.member.telegram_id
+
+    return first_member_id
+
+
 @dp.message_handler(state=UserState.region)
 async def region(message: types.Message, state: FSMContext):
     await state.update_data(region=message.text)
@@ -314,7 +327,7 @@ async def region(message: types.Message, state: FSMContext):
 
     member = await sync_to_async(Member.objects.get)(telegram_id=message.from_id)
 
-    await sync_to_async(Form.objects.create)(
+    new_member = await sync_to_async(Form.objects.create)(
           member=member,
           name=name,
           age=age,
@@ -325,8 +338,19 @@ async def region(message: types.Message, state: FSMContext):
           goal=goal,
           region=region)
 
-    text = await sync_to_async(get_random_form)(member)
-    await bot.send_message(message.chat.id, text=text, reply_markup=m.form_markup)
+    if new_member.id == 2:
+        text_for_first_member = "Кто-то заполнил анкету. Хочешь начать знакомство?"
+        user_id = await sync_to_async(get_id)()
+        await bot.send_message(user_id, text=text_for_first_member, reply_markup=m.dialog2_markup)
+
+    try:
+        text = await sync_to_async(get_random_form)(member)
+        await bot.send_message(message.chat.id, text=text, reply_markup=m.form_markup)
+
+    except IndexError:
+        pass
+        text = "Никто еще не прошел опрос. Ты первый."
+        await bot.send_message(message.chat.id, text=text, reply_markup=m.form_markup_return)
 
 
 @dp.callback_query_handler(text='donate', state=[UserState, None])
