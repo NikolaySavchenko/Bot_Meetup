@@ -49,14 +49,7 @@ class UserState(StatesGroup):
     region = State()
     question = State()
     anounce = State()
-    name = State()
-    age = State()
-    company = State()
-    job = State()
-    stack = State()
-    hobby = State()
-    goal = State()
-    region = State()
+    donate = State()
 
 
 @dp.message_handler()
@@ -130,15 +123,20 @@ async def next_presentation(cb: types.callback_query):
 
 @dp.callback_query_handler(text='schedule', state=[UserState, None])
 async def show_schedule(cb: types.callback_query):
-    message = []
+    messages = []
     curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
     cpd = await sync_to_async(curent_presentation.start_time.date)()
     today_presentations = await sync_to_async(Presentation.objects.filter)(start_time__date=cpd)
     future_presentations = await sync_to_async(lambda: today_presentations.filter(start_time__gte=curent_presentation.start_time).order_by('start_time'))()
-    async for future_presentation in future_presentations:
-        info = f'{future_presentation.topic} начинается в {future_presentation.start_time} и продлится {future_presentation.duration}'
-        await sync_to_async(message.append)(info)
-    await cb.message.answer(message)
+    if future_presentations:
+        async for future_presentation in future_presentations:
+            start_time = future_presentation.start_time.strftime('%H:%M')
+            info = f'{future_presentation.topic} начинается в {start_time} и продлится {future_presentation.duration}'
+            await sync_to_async(messages.append)(info)
+        msg = ('\n '.join(messages))
+    else:
+        msg = 'На сегодня доклады закончились'
+    await cb.message.answer(msg)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
@@ -287,14 +285,23 @@ async def region(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query_handler(text='donate', state=[UserState, None])
-async def make_donation(cb: types.CallbackQuery, state: FSMContext):
+async def donation_size(cb: types.CallbackQuery, state: FSMContext):
+    await cb.message.answer('Введите сумму доната:')
+    await UserState.donate.set()
+
+
+@dp.message_handler(lambda msg: msg.text, state=UserState.donate)
+async def make_donation(msg: types.Message, state: FSMContext):
+    if not msg.text.isnumeric():
+        await msg.answer('Сумма должна быть числом')
+        return
     txt = 'Донат организаторам митапа'
     price = types.LabeledPrice(
         label=txt,
-        amount=100 * 100
+        amount=int(msg.text) * 100
     )
     await bot.send_invoice(
-        cb.message.chat.id,
+        msg.chat.id,
         title=txt,
         description=txt,
         provider_token=PAYMENT_TOKEN,
@@ -310,8 +317,9 @@ async def make_donation(cb: types.CallbackQuery, state: FSMContext):
     )
 
 
-@dp.pre_checkout_query_handler(lambda query: True)
+@dp.pre_checkout_query_handler(lambda query: True, state=UserState.donate)
 async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
+    await sync_to_async(print)('1')
     await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
 
 
