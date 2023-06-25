@@ -4,10 +4,10 @@ import os
 import random
 from pathlib import Path
 
-from django.utils import timezone
-
 import django
 import dotenv
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
@@ -19,7 +19,6 @@ from asgiref.sync import sync_to_async
 
 logging.basicConfig(level=logging.INFO)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'meetup.settings')
-os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 
 
@@ -52,13 +51,28 @@ class UserState(StatesGroup):
     donate = State()
 
 
+@sync_to_async()
+def get_presentations(msg: types.Message):
+    if msg['from']['username']:
+        member, created = Member.objects.get_or_create(telegram_id=msg.from_id, telegram_name=msg['from']['username'])
+    else:
+        member, created = Member.objects.get_or_create(telegram_id=msg.from_id)
+    presentations = Presentation.objects.filter(member=member)
+    member_presentations = []
+    if presentations:
+        for presentation in presentations:
+            start_time = presentation.start_time.strftime('%H:%M')
+            member_presentations.append(start_time)
+        message_part = (', '.join(member_presentations))
+        message = f'Приветствую, {member.telegram_name} у вас запланированы доклады в: {message_part}'
+    else:
+        message = f'Приветствую, {member.telegram_name}'
+    return message
+
+
 @dp.message_handler()
 async def start_conversation(msg: types.Message, state: FSMContext):
-    if msg['from']['username']:
-        member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id, telegram_name=msg['from']['username'])
-    else:
-        member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id)
-    message = f'Приветствую, {member.telegram_name}'
+    message = await get_presentations(msg)
     await msg.answer(message)
     await msg.answer('Main menu', reply_markup=m.client_start_markup)
 
@@ -92,51 +106,64 @@ async def ask_anounce(cb: types.callback_query):
 async def anounce(msg: types.Message, state: FSMContext):
     members = await sync_to_async(Member.objects.exclude)(telegram_id=msg.from_id)
     async for member in members:
-        await bot.send_message(member.telegram_id, msg.text)
-    await msg.answer('Organizer menu', reply_markup=m.organizer_markup)
+        await bot.send_message(member.telegram_id, f'Оповщенеие от организаторов: {msg.text}')
+    await msg.answer('Organizer menu', reply_markup=m.client_start_markup)
+
+
+@sync_to_async()
+def prepare_next_presentation():
+    message = 'Следующий доклад активен'
+
+    curent_presentation = Presentation.objects.get(is_active_now=True)
+    delay = (timezone.localtime(timezone.now()) -
+             (curent_presentation.start_time +
+              curent_presentation.duration))
+    cpd =curent_presentation.start_time.date()
+    today_presentations = Presentation.objects.filter(start_time__date=cpd)
+    future_presentations = today_presentations.filter(start_time__gt=curent_presentation.start_time).order_by('start_time')
+    for future_presentation in future_presentations:
+        future_presentation.start_time = future_presentation.start_time + delay
+        future_presentation.save()
+    curent_presentation.is_active_now = False
+    curent_presentation.save()
+    if future_presentations.first():
+        following_presentation = future_presentations.first()
+        following_presentation.is_active_now = True
+        following_presentation.save()
+    else:
+        message = 'Извините, но на сегодня больше докладов нету'
+    return message
 
 
 @dp.callback_query_handler(text='next_presentation', state=[UserState, None])
 async def next_presentation(cb: types.callback_query):
-    message = 'Следующий доклад активен'
-
-    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
-    delay = (timezone.localtime(timezone.now()) -
-             (curent_presentation.start_time +
-              curent_presentation.duration))
-    cpd = await sync_to_async(curent_presentation.start_time.date)()
-    today_presentations = await sync_to_async(Presentation.objects.filter)(start_time__date=cpd)
-    future_presentations = await sync_to_async(lambda: today_presentations.filter(start_time__gt=curent_presentation.start_time).order_by('start_time'))()
-    async for future_presentation in future_presentations:
-        future_presentation.start_time = future_presentation.start_time + delay
-        await sync_to_async(future_presentation.save)()
-    curent_presentation.is_active_now = False
-    await sync_to_async(curent_presentation.save)()
-    if future_presentations.first():
-        following_presentation = await sync_to_async(future_presentations.first)()
-        following_presentation.is_active_now = True
-        await sync_to_async(following_presentation.save)()
-
+    message = await prepare_next_presentation()
     await cb.message.answer(message)
-    await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
+    await cb.message.answer('Meetup menu', reply_markup=m.client_start_markup)
+
+
+@sync_to_async()
+def get_schedule():
+    messages = []
+    curent_presentation = Presentation.objects.get(is_active_now=True)
+    cpd = curent_presentation.start_time.date()
+    today_presentations = Presentation.objects.filter(start_time__date=cpd)
+    future_presentations = today_presentations.filter(start_time__gte=curent_presentation.start_time).order_by('start_time')
+    if future_presentations:
+        for future_presentation in future_presentations:
+            start_time = future_presentation.start_time.strftime('%H:%M')
+            info = f'{future_presentation.topic} начинается в {start_time} и продлится {future_presentation.duration}'
+            messages.append(info)
+        msg = ('\n '.join(messages))
+    else:
+        msg = 'На сегодня доклады закончились'
+    return msg
 
 
 @dp.callback_query_handler(text='schedule', state=[UserState, None])
 async def show_schedule(cb: types.callback_query):
-    messages = []
-    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
-    cpd = await sync_to_async(curent_presentation.start_time.date)()
-    today_presentations = await sync_to_async(Presentation.objects.filter)(start_time__date=cpd)
-    future_presentations = await sync_to_async(lambda: today_presentations.filter(start_time__gte=curent_presentation.start_time).order_by('start_time'))()
-    if future_presentations:
-        async for future_presentation in future_presentations:
-            start_time = future_presentation.start_time.strftime('%H:%M')
-            info = f'{future_presentation.topic} начинается в {start_time} и продлится {future_presentation.duration}'
-            await sync_to_async(messages.append)(info)
-        msg = ('\n '.join(messages))
-    else:
-        msg = 'На сегодня доклады закончились'
-    await cb.message.answer(msg)
+    message = await get_schedule()
+    await cb.message.answer(message)
     await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
@@ -148,12 +175,30 @@ async def ask_question(cb: types.callback_query):
     await cb.answer()
 
 
+@sync_to_async
+def presentation_member_id():
+    try:
+        curent_presentation = get_object_or_404(Presentation, is_active_now=True)
+        return curent_presentation.member.id
+    except django.http.response.Http404:
+        return
+
+
 @dp.message_handler(lambda msg: msg.text, state=UserState.question)
 async def question(msg: types.Message, state: FSMContext):
-    curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
-    member = await sync_to_async(Member.objects.get)(id=curent_presentation.member.id)
-    await bot.send_message(member.telegram_id, msg.text)
-    await msg.answer('Meetup menu', reply_markup=m.participate_markup)
+    member_id = await presentation_member_id()
+    if member_id and msg.from_user.username:
+        member = await sync_to_async(Member.objects.get)(id=member_id)
+        await bot.send_message(member.telegram_id, f'{msg.from_user.username}: {msg.text}')
+    elif member_id:
+        member = await sync_to_async(Member.objects.get)(id=member_id)
+        await bot.send_message(member.telegram_id, msg.text)
+    else:
+        await msg.answer('Извините, но на сегодня доклады закончились')
+        await msg.answer('Meetup menu', reply_markup=m.client_start_markup)
+        return
+
+    await msg.answer('Meetup menu', reply_markup=m.client_start_markup)
 
 
 def get_random_form(member):
@@ -319,8 +364,13 @@ async def make_donation(msg: types.Message, state: FSMContext):
 
 @dp.pre_checkout_query_handler(lambda query: True, state=UserState.donate)
 async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
-    await sync_to_async(print)('1')
     await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+
+@sync_to_async()
+def donation_member(message):
+    member = Member.objects.get(telegram_id=message.from_id)
+    return member
 
 
 @dp.message_handler(
@@ -335,9 +385,8 @@ async def successful_payment(message: types.Message, state: FSMContext):
         f'Спасибо за донат на сумму {donate}'
         f' {message.successful_payment.currency}'
     )
-    member = await sync_to_async(Member.objects.get)(telegram_id=message.from_id)
-    Donation.objects.create(member=member, donation=donate, donate_time=donate_time)
-    member = await sync_to_async(Member.objects.get)(telegram_id=message.from_id)
+    member = await donation_member(message)
+    await sync_to_async(Donation.objects.create)(member=member, donation=donate, donate_time=donate_time)
     if member.role == 'organizer':
         await message.answer('Organizer menu', reply_markup=m.organizer_markup)
     else:
