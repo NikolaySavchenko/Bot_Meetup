@@ -56,9 +56,26 @@ organizer_markup.add(*additional_organizer_buttons)
 dialog_markup = types.InlineKeyboardMarkup(row_width=2)
 dialog_markup_buttons = [
     types.InlineKeyboardButton(
-        'На логику диалога',
+        'Давай попробуем',
         callback_data='dialog_logic'
     ),
+    types.InlineKeyboardButton(
+        'Не хочу',
+        callback_data='participate_in_meetup'
+    ),
+
 ]
 
 dialog_markup.add(*dialog_markup_buttons)
+
+
+form_markup = types.InlineKeyboardMarkup(row_width=2)
+form_markup_buttons = [
+    types.InlineKeyboardButton(
+        'Подобрать другую',
+        callback_data='repeat_form'
+    ),
+
+]
+
+form_markup.add(*form_markup_buttons)

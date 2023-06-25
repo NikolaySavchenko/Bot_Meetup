@@ -12,7 +12,7 @@ ROLE = [
 
 class Member(models.Model):
     telegram_id = models.IntegerField('telegram_id', unique=True)
-    telegram_name = models.CharField(verbose_name='Телеграм', max_length=200)
+    telegram_name = models.CharField(verbose_name='Телеграм', max_length=200, unique=True)
     role = models.CharField(
         verbose_name='Спикер или Гость?',
         max_length=10,
@@ -35,6 +35,7 @@ class Donation(models.Model):
         related_name='donation',
         verbose_name='Участник'
     )
+    donate_time = models.DateTimeField(verbose_name='Время доната', null=True)
     donation = models.FloatField(verbose_name='Сумма доната', null=True, default=0)
 
     class Meta:
@@ -42,7 +43,7 @@ class Donation(models.Model):
         verbose_name_plural = 'Донаты'
 
     def __str__(self):
-        return self.member
+        return f'{self.member} внес  {self.donation}'
 
 
 class Presentation(models.Model):
