@@ -75,6 +75,10 @@ form_markup_buttons = [
         'Подобрать другую',
         callback_data='repeat_form'
     ),
+    types.InlineKeyboardButton(
+        'Вернуться в главное меню',
+        callback_data='participate_in_meetup'
+    ),
 ]
 
 form_markup.add(*form_markup_buttons)
