@@ -30,9 +30,10 @@ class FormAdmin(admin.ModelAdmin):
         'region'
     )
 
+
 @admin.register(Donation)
 class DonationAdmin(admin.ModelAdmin):
     list_display = (
         'member',
-        'donation',
+        'donation'
     )

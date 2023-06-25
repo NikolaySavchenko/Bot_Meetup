@@ -2,9 +2,9 @@ import asyncio
 import logging
 import os
 import random
+from pathlib import Path
 
 from django.utils import timezone
-from pathlib import Path
 
 import django
 import dotenv
@@ -22,7 +22,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'meetup.settings')
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 
-from meetup_bot.models import Member, Presentation, Form
+
+from meetup_bot.models import Member, Presentation, Form, Donation
+
 import markups as m
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -47,16 +49,22 @@ class UserState(StatesGroup):
     region = State()
     question = State()
     anounce = State()
+    name = State()
+    age = State()
+    company = State()
+    job = State()
+    stack = State()
+    hobby = State()
+    goal = State()
+    region = State()
 
 
 @dp.message_handler()
 async def start_conversation(msg: types.Message, state: FSMContext):
     if msg['from']['username']:
-        member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id,
-                                                                            telegram_name=msg['from']['username'])
+        member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id, telegram_name=msg['from']['username'])
     else:
         member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id)
-    member, created = await sync_to_async(Member.objects.get_or_create)(telegram_id=msg.from_id)
     message = f'Приветствую, {member.telegram_name}'
     await msg.answer(message)
     await msg.answer('Main menu', reply_markup=m.client_start_markup)
@@ -97,7 +105,7 @@ async def anounce(msg: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text='next_presentation', state=[UserState, None])
 async def next_presentation(cb: types.callback_query):
-    message = 'Заглушка для next_presentation'
+    message = 'Следующий доклад активен'
 
     curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
     delay = (timezone.localtime(timezone.now()) -
@@ -143,7 +151,7 @@ async def ask_question(cb: types.callback_query):
 
 
 @dp.message_handler(lambda msg: msg.text, state=UserState.question)
-async def question(msg: types.Message, state:FSMContext):
+async def question(msg: types.Message, state: FSMContext):
     curent_presentation = await sync_to_async(Presentation.objects.get)(is_active_now=True)
     member = await sync_to_async(Member.objects.get)(id=curent_presentation.member.id)
     await bot.send_message(member.telegram_id, msg.text)
@@ -199,28 +207,28 @@ async def form_start(cb: types.callback_query):
     await UserState.name.set()
 
 
-@dp.message_handler(state = UserState.name)
+@dp.message_handler(state=UserState.name)
 async def name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
     await message.answer("Сколько тебе лет?")
     await UserState.age.set()
 
 
-@dp.message_handler(state = UserState.age)
+@dp.message_handler(state=UserState.age)
 async def age(message: types.Message, state: FSMContext):
     await state.update_data(age=message.text)
     await message.answer("В какой компании работаешь?")
     await UserState.company.set()
 
 
-@dp.message_handler(state = UserState.company)
+@dp.message_handler(state=UserState.company)
 async def company(message: types.Message, state: FSMContext):
     await state.update_data(company=message.text)
     await message.answer("Должность?")
     await UserState.job.set()
 
 
-@dp.message_handler(state = UserState.job)
+@dp.message_handler(state=UserState.job)
 async def job(message: types.Message, state: FSMContext):
     await state.update_data(job=message.text)
     await message.answer("С какими технологиями работаешь?")
@@ -280,7 +288,7 @@ async def region(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text='donate', state=[UserState, None])
 async def make_donation(cb: types.CallbackQuery, state: FSMContext):
-    txt = 'заглушка для сообщения при донате'
+    txt = 'Донат организаторам митапа'
     price = types.LabeledPrice(
         label=txt,
         amount=100 * 100
@@ -312,12 +320,20 @@ async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
     state=[UserState, None]
 )
 async def successful_payment(message: types.Message, state: FSMContext):
+    donate = message.successful_payment.total_amount // 100
+    donate_time = timezone.localtime(timezone.now())
     await bot.send_message(
         message.chat.id,
-        f'Payment at {message.successful_payment.total_amount // 100}'
-        f'{message.successful_payment.currency} done'
+        f'Спасибо за донат на сумму {donate}'
+        f' {message.successful_payment.currency}'
     )
-    # тут фунция для записи в бд информации о донате await sync_to_async(funcs.pay_order)(payloads['schedule_id'])
+    member = await sync_to_async(Member.objects.get)(telegram_id=message.from_id)
+    Donation.objects.create(member=member, donation=donate, donate_time=donate_time)
+    member = await sync_to_async(Member.objects.get)(telegram_id=message.from_id)
+    if member.role == 'organizer':
+        await message.answer('Organizer menu', reply_markup=m.organizer_markup)
+    else:
+        await message.answer('Meetup menu', reply_markup=m.participate_markup)
 
 
 executor.start_polling(dp, skip_updates=False)

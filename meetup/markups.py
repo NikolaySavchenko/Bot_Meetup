@@ -75,7 +75,6 @@ form_markup_buttons = [
         'Подобрать другую',
         callback_data='repeat_form'
     ),
-
 ]
 
 form_markup.add(*form_markup_buttons)
