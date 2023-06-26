@@ -74,14 +74,14 @@ def get_presentations(msg: types.Message):
 async def start_conversation(msg: types.Message, state: FSMContext):
     message = await get_presentations(msg)
     await msg.answer(message)
-    await msg.answer('Main menu', reply_markup=m.client_start_markup)
+    await msg.answer('Ты можешь:', reply_markup=m.client_start_markup)
 
 
 @dp.callback_query_handler(text='about_bot')
 async def about_bot(cb: types.callback_query):
     message = 'Данный бот позволяет получить информацию о расписании митапа и задать вопросы текущему спикеру'
     await cb.message.answer(message)
-    await cb.message.answer('Main menu', reply_markup=m.client_start_markup)
+    await cb.message.answer('Ты можешь:', reply_markup=m.client_start_markup)
 
 
 @dp.callback_query_handler(text='participate_in_meetup', state=[UserState, None])
@@ -91,7 +91,7 @@ async def participate(cb: types.callback_query, state: FSMContext):
     if member.role == 'organizer':
         await cb.message.answer('Organizer menu', reply_markup=m.organizer_markup)
     else:
-        await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
+        await cb.message.answer('Я могу тебе предложить:', reply_markup=m.participate_markup)
 
 
 @dp.callback_query_handler(text='anounce')
@@ -140,7 +140,7 @@ def prepare_next_presentation():
 async def next_presentation(cb: types.callback_query):
     message = await prepare_next_presentation()
     await cb.message.answer(message)
-    await cb.message.answer('Meetup menu', reply_markup=m.client_start_markup)
+    await cb.message.answer('Я могу тебе предложить:', reply_markup=m.client_start_markup)
 
 
 @sync_to_async()
@@ -165,7 +165,7 @@ def get_schedule():
 async def show_schedule(cb: types.callback_query):
     message = await get_schedule()
     await cb.message.answer(message)
-    await cb.message.answer('Meetup menu', reply_markup=m.participate_markup)
+    await cb.message.answer('Я могу тебе предложить:', reply_markup=m.participate_markup)
 
 
 @dp.callback_query_handler(text='ask_question')
@@ -196,10 +196,10 @@ async def question(msg: types.Message, state: FSMContext):
         await bot.send_message(member.telegram_id, msg.text)
     else:
         await msg.answer('Извините, но на сегодня доклады закончились')
-        await msg.answer('Meetup menu', reply_markup=m.client_start_markup)
+        await msg.answer('Я могу тебе предложить:', reply_markup=m.client_start_markup)
         return
 
-    await msg.answer('Meetup menu', reply_markup=m.client_start_markup)
+    await msg.answer('Я могу тебе предложить:', reply_markup=m.client_start_markup)
 
 
 def get_random_form(member):
@@ -415,7 +415,7 @@ async def successful_payment(message: types.Message, state: FSMContext):
     if member.role == 'organizer':
         await message.answer('Organizer menu', reply_markup=m.organizer_markup)
     else:
-        await message.answer('Meetup menu', reply_markup=m.participate_markup)
+        await message.answer('Я могу тебе предложить:', reply_markup=m.participate_markup)
 
 
 executor.start_polling(dp, skip_updates=False)
