@@ -89,6 +89,3 @@ class Form(models.Model):
     class Meta:
         verbose_name = 'Анкета'
         verbose_name_plural = 'Анкеты'
-
-    def __str__(self):
-        return self.name, self.job, self.region
