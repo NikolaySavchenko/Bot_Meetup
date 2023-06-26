@@ -106,7 +106,7 @@ async def ask_anounce(cb: types.callback_query):
 async def anounce(msg: types.Message, state: FSMContext):
     members = await sync_to_async(Member.objects.exclude)(telegram_id=msg.from_id)
     async for member in members:
-        if int(msg.from_id) > 1000:
+        if int(member.telegram_id) > 100000:
             await bot.send_message(member.telegram_id, f'Оповщенеие от организаторов: {msg.text}')
     await msg.answer('Organizer menu', reply_markup=m.client_start_markup)
 
