@@ -89,7 +89,7 @@ async def participate(cb: types.callback_query, state: FSMContext):
     await state.reset_state(with_data=False)
     member = await sync_to_async(Member.objects.get)(telegram_id=cb['from']['id'])
     if member.role == 'organizer':
-        await cb.message.answer('Organizer menu', reply_markup=m.organizer_markup)
+        await cb.message.answer('Меню организатора', reply_markup=m.organizer_markup)
     else:
         await cb.message.answer('Я могу тебе предложить:', reply_markup=m.participate_markup)
 
@@ -108,7 +108,7 @@ async def anounce(msg: types.Message, state: FSMContext):
     async for member in members:
         if int(member.telegram_id) > 100000:
             await bot.send_message(member.telegram_id, f'Оповщенеие от организаторов: {msg.text}')
-    await msg.answer('Organizer menu', reply_markup=m.client_start_markup)
+    await msg.answer('Меню организатора', reply_markup=m.client_start_markup)
 
 
 @sync_to_async()
@@ -413,7 +413,7 @@ async def successful_payment(message: types.Message, state: FSMContext):
     member = await donation_member(message)
     await sync_to_async(Donation.objects.create)(member=member, donation=donate, donate_time=donate_time)
     if member.role == 'organizer':
-        await message.answer('Organizer menu', reply_markup=m.organizer_markup)
+        await message.answer('Меню организатора', reply_markup=m.organizer_markup)
     else:
         await message.answer('Я могу тебе предложить:', reply_markup=m.participate_markup)
 
